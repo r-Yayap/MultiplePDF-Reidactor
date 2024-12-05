@@ -7,14 +7,13 @@ from utils import adjust_coordinates_for_rotation, adjust_point_for_rotation
 
 
 class PDFProcessor:
-    def __init__(self, pdf_folder, output_excel_path, areas, insertion_points, ocr_settings, include_subfolders):
+    def __init__(self, pdf_folder, output_excel_path, areas, insertion_points, include_subfolders):
 
         self.insertion_points = insertion_points  # Store insertion points
 
         self.pdf_folder = pdf_folder
         self.output_excel_path = output_excel_path
         self.areas = areas
-        self.ocr_settings = ocr_settings
         self.include_subfolders = include_subfolders
         self.temp_image_folder = "temp_images"
         self.headers = ["Size (Bytes)", "Date Last Modified", "Folder", "Filename", "Page No"] + \

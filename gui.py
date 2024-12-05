@@ -24,7 +24,7 @@ class ReidactorGUI:
         self.include_subfolders = False
         self.pdf_folder = ''
         self.output_excel_path = ''
-        self.ocr_settings = {'enable_ocr': 'Off', 'dpi_value': 150, 'tessdata_folder': TESSDATA_FOLDER}
+
         self.recent_pdf_path = None
 
         self.setup_widgets()
@@ -465,7 +465,6 @@ class ReidactorGUI:
             output_excel_path=self.output_excel_path,
             areas=self.pdf_viewer.areas,
             insertion_points=self.pdf_viewer.insertion_points,
-            ocr_settings=self.ocr_settings,
             include_subfolders=self.include_subfolders
         )
 
