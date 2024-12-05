@@ -277,17 +277,12 @@ class PDFViewer:
             self.canvas.config(yscrollcommand=self.v_scrollbar.set, xscrollcommand=self.h_scrollbar.set,
                                scrollregion=(0, 0, zoomed_width, zoomed_height))
 
-            # Redraw rectangles for deletion
-            self.update_rectangles()
-
             for insertion in self.insertion_points:
                 x, y = [coord * self.current_zoom for coord in insertion['position']]
 
                 text = insertion['text']
                 font_style = insertion.get('font')
                 base_font_size = insertion.get('size')
-
-
 
                 # Scale font size based on DPI and zoom
                 dpi_ratio = self.system_dpi / 72  # 72 is the PDF's default DPI
@@ -303,7 +298,6 @@ class PDFViewer:
                     anchor=tk.SW,
                     font=(font_style, scaled_font_size)
                 )
-
 
         except ValueError as e:
             print(f"Error updating display: {e}")
