@@ -16,7 +16,6 @@ class PDFProcessor:
         self.areas = areas
         self.ocr_settings = ocr_settings
         self.include_subfolders = include_subfolders
-        self.tessdata_folder = find_tessdata() if ocr_settings["enable_ocr"] != "Off" else None
         self.temp_image_folder = "temp_images"
         self.headers = ["Size (Bytes)", "Date Last Modified", "Folder", "Filename", "Page No"] + \
                        [f"{area['title']}" if "title" in area else f"Area {i + 1}" for i, area in enumerate(self.areas)]
