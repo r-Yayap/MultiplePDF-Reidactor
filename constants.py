@@ -14,6 +14,11 @@ CURRENT_ZOOM = 2.0
 
 BUTTON_FONT = "Verdana"
 
+SCROLL_MARGIN = 20  # Distance from the canvas edge to start scrolling
+SCROLL_INCREMENT_THRESHOLD = 3  # Adjust this for slower/faster auto-scroll
+scroll_counter = 0  # This will be updated in your main code
+RESIZE_DELAY = 700  # milliseconds delay
+
 
 FONT_MAPPING = {
     "Courier": "Courier",
@@ -33,13 +38,4 @@ FONT_MAPPING = {
 }
 
 
-SCROLL_MARGIN = 20  # Distance from the canvas edge to start scrolling
-SCROLL_INCREMENT_THRESHOLD = 3  # Adjust this for slower/faster auto-scroll
-scroll_counter = 0  # This will be updated in your main code
-RESIZE_DELAY = 700  # milliseconds delay
 
-
-
-'''
-
-'''
