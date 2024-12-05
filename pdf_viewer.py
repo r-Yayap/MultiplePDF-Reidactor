@@ -170,9 +170,6 @@ class PDFViewer:
             )
             print(f"Added text at ({adjusted_x}, {adjusted_y}): {text}, Font: {font_style}, Size: {scaled_font_size}")
 
-
-
-
     def set_custom_title(self):
         """Prompts user for a custom title and assigns it to the selected rectangle."""
         custom_title = askstring("Custom Title", "Enter a custom title:")
@@ -313,8 +310,6 @@ class PDFViewer:
 
         # Update any rectangle overlays or additional graphics
         self.update_rectangles()
-
-
 
     def start_rectangle(self, event):
         """Begins the rectangle selection process on mouse press."""

@@ -14,7 +14,6 @@ from constants import *
 from pdf_processor import PDFProcessor
 from pdf_viewer import PDFViewer
 from utils import create_tooltip, EditableTreeview
-from utils import find_tessdata
 from functools import partial
 
 class ReidactorGUI:
@@ -258,28 +257,6 @@ class ReidactorGUI:
                                                width=25, height=10)
         self.pdf_folder_button.place(x=20, y=10)
 
-        # OCR Option Menu
-        self.ocr_menu_var = StringVar(value="OCR-Off")
-        self.ocr_menu = ctk.CTkOptionMenu(
-            self.root,
-            values=["Off", "Text-first", "OCR-All", "Text1st+Image-beta"],
-            command=self.ocr_menu_callback,  # Use self.ocr_menu_callback here
-            font=("Verdana Bold", 9),
-            variable=self.ocr_menu_var,
-            width=85,
-            height=18
-        )
-
-        self.ocr_menu.place(x=-330, y=-10)
-
-        # DPI Option Menu
-        self.dpi_var = ctk.IntVar(value=150)
-        self.dpi_menu = ctk.CTkOptionMenu(self.root, values=["75", "150", "300", "450", "600"],
-                                          command=self.dpi_callback, font=("Verdana Bold", 7),
-                                          variable=self.dpi_var, width=43, height=14)
-        self.dpi_menu.place(x=-372, y=-30)
-        self.dpi_label = ctk.CTkLabel(self.root, text="DPI:", text_color="gray59", font=("Verdana Bold", 8))
-        self.dpi_label.place(x=-348, y=-32)
 
         # Zoom Slider
         self.zoom_var = ctk.DoubleVar(value=self.pdf_viewer.current_zoom)  # Initialize with the current zoom level
@@ -416,8 +393,6 @@ class ReidactorGUI:
         self.root.bind("<Configure>", self.on_window_resize)
 
     def setup_tooltips(self):
-        create_tooltip(self.ocr_menu, "OCR options - select an OCR mode for text extraction")
-        create_tooltip(self.dpi_menu, "DPI resolution")
         create_tooltip(self.pdf_folder_entry, "Select the main folder containing PDF files")
         create_tooltip(self.open_sample_button, "Open a sample PDF to set areas")
         create_tooltip(self.output_path_entry, "Select folder for the Excel output")
@@ -426,45 +401,6 @@ class ReidactorGUI:
         create_tooltip(self.import_button, "Import a saved template of selected areas")
         create_tooltip(self.export_button, "Export the selected areas as a template")
         create_tooltip(self.clear_areas_button, "Clear all selected areas")
-
-
-    def ocr_menu_callback(self, choice):
-        print("OCR menu dropdown clicked:", choice)
-
-        def enable_ocr_menu(enabled):
-            color = "green4" if enabled else "gray29"
-            self.ocr_menu.configure(fg_color=color, button_color=color)
-            self.dpi_menu.configure(state="normal" if enabled else "disabled", fg_color=color, button_color=color)
-
-        # If OCR is "Off", don't check for tessdata and disable OCR options
-        if choice == "Off":
-            enable_ocr_menu(False)
-            print("OCR disabled.")
-            self.ocr_settings['enable_ocr'] = "Off"
-            return
-
-        # Check tessdata only for OCR modes that need it
-        if choice in ("Text-first", "OCR-All", "Text1st+Image-beta"):
-            found_tesseract_path = find_tessdata()
-            if found_tesseract_path:
-                self.ocr_settings['tessdata_folder'] = found_tesseract_path
-                enable_ocr_menu(True)
-                if choice == "Text-first":
-                    print("OCR will start if no text is extracted.")
-                elif choice == "OCR-All":
-                    print("OCR will be enabled for every area.")
-                elif choice == "Text1st+Image-beta":
-                    print("OCR will start if no text is extracted and images will also be extracted.")
-            else:
-                enable_ocr_menu(False)
-                print("Tessdata folder not found. OCR disabled.")
-
-        self.ocr_settings['enable_ocr'] = choice
-        print("OCR mode:", self.ocr_settings['enable_ocr'])
-
-    def dpi_callback(self, dpi_value):
-        self.ocr_settings['dpi_value'] = int(dpi_value)
-        print(f"DPI set to: {dpi_value}")
 
     def browse_pdf_folder(self):
         self.pdf_folder = filedialog.askdirectory()
@@ -581,14 +517,6 @@ class ReidactorGUI:
         except Exception as e:
             print(f"Error updating progress: {e}")
 
-
-    def optionmenu_callback(self, choice):
-        """Execute the corresponding function based on the selected option."""
-        action = OPTION_ACTIONS.get(choice)
-        if action:
-            action()  # Call the function
-        else:
-            messagebox.showerror("Error", f"No action found for {choice}")
 
     def on_window_resize(self, event):
         """Handles window resizing and adjusts the canvas dimensions."""

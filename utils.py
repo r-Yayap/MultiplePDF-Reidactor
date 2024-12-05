@@ -151,54 +151,6 @@ def create_tooltip(widget, message,
                       message=message)
 
 
-
-def find_tessdata():
-    """
-    Attempts to locate the Tesseract OCR tessdata folder. Searches typical installation
-    directories, and if not found, prompts the user to manually select the folder.
-
-    Returns:
-        str: Path to the tessdata folder if found, or None if not found.
-    """
-    global tessdata_folder  # Use the global variable
-
-    # Define the subdirectories
-    tesseract_subdirectory = "Tesseract-OCR"
-    tessdata_subdirectory = "tessdata"
-
-    # Check Program Files directory
-    program_files_dir = os.path.join("C:", os.sep, "Program Files", tesseract_subdirectory, tessdata_subdirectory)
-    if os.path.exists(program_files_dir):
-        tessdata_folder = program_files_dir
-        os.environ["TESSDATA_PREFIX"] = program_files_dir
-        return tessdata_folder
-
-    # Get the local application data directory
-    local_programs_dir = os.path.join(os.getenv("LOCALAPPDATA"), "Programs")
-    local_programs_path = os.path.join(local_programs_dir, tesseract_subdirectory, tessdata_subdirectory)
-    if os.path.exists(local_programs_path):
-        tessdata_folder = local_programs_path
-        os.environ["TESSDATA_PREFIX"] = local_programs_path
-        return tessdata_folder
-
-    # Platform-independent local application data directory
-    app_data_dir = os.path.join(os.getenv("APPDATA"), tesseract_subdirectory, tessdata_subdirectory)
-    if os.path.exists(app_data_dir):
-        tessdata_folder = app_data_dir
-        os.environ["TESSDATA_PREFIX"] = app_data_dir
-        return tessdata_folder
-
-    # Manual selection if not found
-    manual_path = filedialog.askdirectory(title="Select Tesseract TESSDATA folder manually")
-    if os.path.exists(manual_path):
-        tessdata_folder = manual_path
-        os.environ["TESSDATA_PREFIX"] = manual_path
-        return tessdata_folder
-    else:
-        print("Invalid path. Tesseract tessdata folder not found.")
-        return None
-
-
 def adjust_coordinates_for_rotation(coordinates, rotation, pdf_height, pdf_width):
     """
     Adjusts the given coordinates based on the rotation of a PDF page.
@@ -255,17 +207,4 @@ def adjust_point_for_rotation(point, rotation, pdf_height, pdf_width):
         return pdf_height - y, x
     else:
         raise ValueError("Invalid rotation angle. Must be 0, 90, 180, or 270 degrees.")
-
-
-
-def clean_text(text):
-    # Replace illegal characters with a placeholder
-    cleaned_text = ''.join(char if char.isprintable() else '�' for char in text)
-    return cleaned_text.strip()
-
-def get_cell_dimensions(sheet, cell):
-    col_letter = get_column_letter(cell.column)
-    col_width = sheet.column_dimensions[col_letter].width or 8.43  # Default width if not set
-    row_height = sheet.row_dimensions[cell.row].height or 15  # Default height if not set
-    return col_width * 7, row_height  # Approximate width in pixels
 

@@ -3,7 +3,7 @@
 import os
 import re
 import pymupdf as fitz
-from utils import adjust_coordinates_for_rotation, find_tessdata, adjust_point_for_rotation
+from utils import adjust_coordinates_for_rotation, adjust_point_for_rotation
 
 
 class PDFProcessor:
