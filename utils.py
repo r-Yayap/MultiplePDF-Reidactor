@@ -1,10 +1,6 @@
 # utils.py
 
-import os
-from tkinter import filedialog
 from CTkToolTip import *
-from openpyxl.utils import get_column_letter
-
 from constants import *
 import tkinter as tk
 from tkinter import ttk
