@@ -1,14 +1,15 @@
-#extractor.py
+#pdf_processor.py
 
 import os
 import re
 import pymupdf as fitz
-from utils import adjust_coordinates_for_rotation, adjust_point_for_rotation
 
+import multiprocessing
+from functools import partial
+from utils import adjust_coordinates_for_rotation, adjust_point_for_rotation
 
 class PDFProcessor:
     def __init__(self, pdf_folder, output_excel_path, areas, insertion_points, include_subfolders):
-
         self.insertion_points = insertion_points  # Store insertion points
 
         self.pdf_folder = pdf_folder
@@ -39,15 +40,30 @@ class PDFProcessor:
         return re.sub(r'\s+', ' ', text)
 
     def start_processing(self, progress_list, total_files):
-        """Extracts text from PDFs and updates the progress list."""
+        """Extracts text from PDFs using multiprocessing and updates the progress list."""
         try:
             # Gather all PDF files in the specified folder
             pdf_files = self.get_pdf_files()
             total_files.value = len(pdf_files)
 
-            # Process each file
-            for pdf_path in pdf_files:
-                self.process_single_pdf(pdf_path, progress_list)
+            if not pdf_files:
+                print("No PDF files found in the specified folder.")
+                return
+
+            # Create a multiprocessing pool
+            pool = multiprocessing.Pool()
+            manager = multiprocessing.Manager()
+            progress_list = manager.list()  # Shared list for progress tracking
+
+            # Use partial to pass the shared progress list to process_single_pdf
+            process_func = partial(self.process_single_pdf, progress_list=progress_list)
+
+            # Process the files in parallel
+            pool.map(process_func, pdf_files)
+
+            # Close and join the pool
+            pool.close()
+            pool.join()
 
         except Exception as e:
             print(f"Error during extraction: {e}")
@@ -101,6 +117,7 @@ class PDFProcessor:
 
             if progress_list is not None:
                 progress_list.append(input_pdf_path)
+
         except Exception as e:
             print(f"Error processing {input_pdf_path}: {e}")
 
