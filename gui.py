@@ -31,6 +31,196 @@ class ReidactorGUI:
         self.setup_bindings()
         self.setup_tooltips()
 
+    def setup_widgets(self):
+        # PDF Folder Entry
+        self.pdf_folder_entry = ctk.CTkEntry(self.root, width=270, height=20, font=(BUTTON_FONT, 9),
+                                             placeholder_text="Select Folder with PDFs", border_width=1,
+                                             corner_radius=3)
+        self.pdf_folder_entry.place(x=50, y=10)
+        self.pdf_folder_button = ctk.CTkButton(self.root, text="...", command=self.browse_pdf_folder,
+                                               font=(BUTTON_FONT, 9),
+                                               width=25, height=10)
+        self.pdf_folder_button.place(x=20, y=10)
+
+
+        # Zoom Slider
+        self.zoom_var = ctk.DoubleVar(value=self.pdf_viewer.current_zoom)  # Initialize with the current zoom level
+        self.zoom_slider = ctk.CTkSlider(self.root, from_=0.1, to=4, variable=self.zoom_var,
+                                         command=self.update_zoom, width=155)
+        self.zoom_slider.place(x=20, y=110)
+
+        # Open Sample PDF Button
+        self.open_sample_button = ctk.CTkButton(self.root, text="Open PDF", command=self.open_sample_pdf,
+                                                font=(BUTTON_FONT, 9),
+                                                width=25, height=10)
+        self.open_sample_button.place(x=20, y=35)
+
+        # Recent PDF Button
+        self.recent_pdf_button = ctk.CTkButton(self.root, text="Recent", command=self.open_recent_pdf,
+                                               font=(BUTTON_FONT, 9), width=40, height=10)
+        self.recent_pdf_button.place(x=87, y=35)
+
+        # Close PDF Button
+        self.close_pdf_button = ctk.CTkButton(self.root, text="x", command=self.close_pdf,
+                                              font=(BUTTON_FONT, 9), width=10, height=10, fg_color="red2")
+        self.close_pdf_button.place(x=143, y=35)
+
+        # Output Excel Path
+        self.output_path_entry = ctk.CTkEntry(self.root, width=270, height=20, font=(BUTTON_FONT, 9),
+                                              placeholder_text="Select Folder for Excel output",
+                                              border_width=1, corner_radius=3)
+        self.output_path_entry.place(x=50, y=60)
+        self.output_path_button = ctk.CTkButton(self.root, text="...", command=self.browse_output_path,
+                                                font=(BUTTON_FONT, 9),
+                                                width=25, height=10)
+        self.output_path_button.place(x=20, y=60)
+
+        # Include Subfolders Checkbox
+        self.include_subfolders_var = ctk.IntVar()
+        self.include_subfolders_checkbox = ctk.CTkCheckBox(self.root, text="Include Subfolders?",
+                                                           variable=self.include_subfolders_var,
+                                                           command=self.toggle_include_subfolders,
+                                                           font=(BUTTON_FONT, 9),checkbox_width=17, checkbox_height=17)
+        self.include_subfolders_checkbox.place(x=192, y=34)
+
+
+        # Areas Treeview setup
+        self.areas_frame = ctk.CTkFrame(self.root, height=1, width=200, border_width=0)
+        self.areas_frame.place(x=-425, y=-10)
+
+        self.areas_tree = EditableTreeview(
+            self,
+            self.areas_frame,
+            columns=("Title", "x0", "y0", "x1", "y1"),  # Ensure "Title" is included
+            show="headings",
+            height=3
+        )
+
+        # Set up static headers and fixed column widths
+        self.areas_tree.heading("Title", text="Title")
+        self.areas_tree.column("Title", width=50, anchor="center")
+        for col in ("x0", "y0", "x1", "y1"):
+            self.areas_tree.heading(col, text=col)
+            self.areas_tree.column(col, width=45, anchor="center")
+
+        # Pack the Treeview into the frame
+        self.areas_tree.pack(side="left")
+
+        # Import, Export, and Clear Areas Buttons
+        self.import_button = ctk.CTkButton(self.root, text="Import", command=self.import_from_excel,
+                                           font=(BUTTON_FONT, 8.5), width=55, height=7)
+        self.import_button.place(x=890, y=33)
+
+        self.export_button = ctk.CTkButton(self.root, text="Export", command=self.export_to_excel,
+                                           font=(BUTTON_FONT, 8.5), width=55, height=7)
+        self.export_button.place(x=890, y=53)
+
+        self.clear_areas_button = ctk.CTkButton(self.root, text="Clear All", command=self.clear_all_areas,
+                                                font=(BUTTON_FONT, 8.5), width=55, height=7)
+        self.clear_areas_button.place(x=890, y=73)
+
+        # Modes
+        self.mode_label = ctk.CTkLabel(self.root, text="MODE:", font=(BUTTON_FONT, 9))
+        self.mode_label.place(x=337, y=0)
+
+        self.text_mode_button = ctk.CTkButton(self.root, text="Text", command=self.toggle_text_mode,
+                                              font=(BUTTON_FONT, 10), width=80, height=25)
+        self.text_mode_button.place(x=330, y=24)
+
+        self.deletion_mode_button = ctk.CTkButton(self.root, text="Redact", command=self.toggle_deletion_mode,
+                                                  font=(BUTTON_FONT, 10), width=80, height=25)
+        self.deletion_mode_button.place(x=330, y=54)
+
+        # Font Style Dropdown
+        self.font_label = ctk.CTkLabel(self.root, text="Font:", font=(BUTTON_FONT, 9))
+        self.font_label.place(x=420, y=13)
+
+        self.font_style_var = StringVar(value="Helvetica")  # Default font
+        self.font_styles = list(pymupdf.Base14_fontdict.values())  # Base-14 font styles
+        self.font_style_menu = ctk.CTkOptionMenu(
+            self.root, dynamic_resizing=False,
+            values=self.font_styles,
+            variable=self.font_style_var,
+            font=(BUTTON_FONT, 9),
+            width=88,
+            height=18
+        )
+        self.font_style_menu.place(x=420, y=35)  # Adjust position as needed
+
+
+
+        # Font Size Textbox
+        self.font_size_var = StringVar(value="9")  # Default font size
+        self.font_size_entry = ctk.CTkEntry(
+            self.root,
+            textvariable=self.font_size_var,
+            font=(BUTTON_FONT, 9),
+            width=40,
+            height=20
+        )
+        self.font_size_entry.place(x=420, y=56)  # Adjust position as needed
+
+        # self.size_label = ctk.CTkLabel(self.root, text="Font Size:", font=(BUTTON_FONT, 9))
+        # self.size_label.place(x=423, y=38)
+
+        # Revision Updater Checkbox
+        self.revision_updater_var = ctk.IntVar()
+        self.revision_updater_checkbox = ctk.CTkCheckBox(
+            self.root, text="Revision Updater",
+            variable=self.revision_updater_var,
+            command=self.toggle_revision_updater,
+            font=(BUTTON_FONT, 9),
+            checkbox_width=17, checkbox_height=17
+        )
+        self.revision_updater_checkbox.place(x=522, y=5)  # Adjust position as needed
+
+        self.clipping_area_button = ctk.CTkButton(
+            self.root, text="History Area",
+            font=(BUTTON_FONT, 9), width=60, height=25,
+            command=self.set_clipping_area
+        )
+        self.clipping_area_button.place(x=522, y=30)  # Adjust position as needed
+        self.clipping_area_button.configure(state="disabled")  # Disable by default
+
+        self.rev_area_button = ctk.CTkButton(
+            self.root, text="Rev No Area",
+            font=(BUTTON_FONT, 9), width=60, height=25,
+            command=self.set_revision_area
+        )
+        self.rev_area_button.place(x=522, y=60)  # Adjust position as needed
+        self.rev_area_button.configure(state="disabled")  # Disable by default
+
+
+
+        # Date Entry
+        self.date_entry = ctk.CTkEntry(
+            self.root, width=150, height=20, border_width=1, corner_radius=3,
+            font=(BUTTON_FONT, 9), placeholder_text="Rev Date (e.g., 09-Jan-25)"
+        )
+        self.date_entry.place(x=610, y=30)  # Adjust position as needed
+        self.date_entry.configure(state="disabled")  # Disable by default
+
+        # Description Entry
+        self.description_entry = ctk.CTkEntry(
+            self.root, width=150, height=20, border_width=1, corner_radius=3,
+            font=(BUTTON_FONT, 9), placeholder_text="Rev Description (e.g., Issued for Tender)"
+        )
+        self.description_entry.place(x=610, y=60)  # Adjust position as needed
+        self.description_entry.configure(state="disabled")  # Disable by default
+
+        # Process Button
+        self.extract_button = ctk.CTkButton(self.root, text="PROCESS", font=("Arial Black", 12),
+                                            corner_radius=10, width=75, height=55, command=self.start_processing)
+        self.extract_button.place(x=793, y=35)
+
+
+        # Version Label with Tooltip
+        self.version_label = ctk.CTkLabel(self.root, text=VERSION_TEXT, fg_color="transparent",
+                                          text_color="gray59",
+                                          font=(BUTTON_FONT, 9.5))
+        self.version_label.place(x=835, y=5)
+        self.version_label.bind("<Button-1>", self.display_version_info)
+
     def export_rectangles(self):
         """Exports the currently selected areas (rectangles) to a JSON file."""
         export_file_path = filedialog.asksaveasfilename(
@@ -70,11 +260,11 @@ class ReidactorGUI:
         print("All areas cleared.")
 
     def export_to_excel(self):
-        """Exports deletion areas and insertion points to an Excel file."""
+        """Exports deletion areas, insertion points, and table/revision coordinates to an Excel file."""
         export_file_path = filedialog.asksaveasfilename(
             defaultextension=".xlsx",
             filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")],
-            title="Export Deletion & Insertion Areas"
+            title="Export Areas"
         )
 
         if not export_file_path:
@@ -105,19 +295,28 @@ class ReidactorGUI:
                     point["size"]
                 ])
 
+            # Add Table and Revision Areas sheet
+            ws_table_revision = wb.create_sheet(title="Table and Revision Areas")
+            ws_table_revision.append(["Type", "X0", "Y0", "X1", "Y1"])  # Headers
+            if self.pdf_viewer.table_coordinates:
+                ws_table_revision.append(["Table"] + self.pdf_viewer.table_coordinates)
+            if self.pdf_viewer.rev_coordinates:
+                ws_table_revision.append(["Revision"] + self.pdf_viewer.rev_coordinates)
+
             # Save the workbook
             wb.save(export_file_path)
             print(f"Exported to Excel at {export_file_path}")
-            messagebox.showinfo("Export Successful", "Deletion areas and insertion points have been exported to Excel.")
+            messagebox.showinfo("Export Successful",
+                                "Areas, insertion points, and coordinates have been exported to Excel.")
         except Exception as e:
             print(f"Error exporting to Excel: {e}")
             messagebox.showerror("Export Error", f"An error occurred while exporting to Excel: {e}")
 
     def import_from_excel(self):
-        """Imports deletion areas and insertion points from an Excel file."""
+        """Imports deletion areas, insertion points, and table/revision coordinates from an Excel file."""
         import_file_path = filedialog.askopenfilename(
             filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")],
-            title="Import Deletion & Insertion Areas"
+            title="Import Areas"
         )
 
         if not import_file_path:
@@ -153,13 +352,30 @@ class ReidactorGUI:
                         "size": int(size) if size else 12  # Default size if missing
                     })
 
+            # Read Table and Revision Areas
+            if "Table and Revision Areas" in wb.sheetnames:
+                ws_table_revision = wb["Table and Revision Areas"]
+
+                # Check if the sheet has at least one row of data
+                rows = list(ws_table_revision.iter_rows(min_row=2, values_only=True))  # Skip the header row
+                if rows:
+                    for row in rows:
+                        if any(row):  # Skip empty rows
+                            area_type, x0, y0, x1, y1 = row
+                            if area_type == "Table":
+                                self.pdf_viewer.table_coordinates = [x0, y0, x1, y1]
+                            elif area_type == "Revision":
+                                self.pdf_viewer.rev_coordinates = [x0, y0, x1, y1]
+                else:
+                    print("Table and Revision Areas sheet is blank. Skipping update.")
+
             # Refresh the canvas and Treeview
             self.pdf_viewer.update_rectangles()
             self.update_areas_treeview()
 
-            print(f"Imported deletion areas and insertion points from {import_file_path}")
+            print(f"Imported areas, insertion points, and coordinates from {import_file_path}")
             messagebox.showinfo("Import Successful",
-                                "Deletion areas and insertion points have been imported successfully.")
+                                "Areas, insertion points, and coordinates have been imported successfully.")
         except Exception as e:
             print(f"Error importing from Excel: {e}")
             messagebox.showerror("Import Error", f"An error occurred while importing from Excel: {e}")
@@ -224,173 +440,56 @@ class ReidactorGUI:
 
                 print("Removed rectangle at index", index)
 
-    def toggle_text_mode(self):
-        """Activates text mode and updates button colors."""
-        # Activate text insertion mode in the PDF viewer
-        font_style = self.font_style_var.get()
-        font_size = int(self.font_size_var.get())
-        self.pdf_viewer.set_text_insertion_mode(font_style, font_size)
-        print(f"Text insertion mode activated with font {font_style} and size {font_size}.")
-
-        # Update button colors
-        self.text_mode_button.configure(fg_color="green4", text_color="white")  # Highlight active mode
-        self.deletion_mode_button.configure(fg_color="cornsilk4", text_color="black")  # Reset other button
-
-    def toggle_deletion_mode(self):
-        """Activates deletion mode and updates button colors."""
-        # Activate deletion mode in the PDF viewer
-        self.pdf_viewer.set_deletion_mode()
-        print("Deletion mode activated.")
-
-        # Update button colors
-        self.deletion_mode_button.configure(fg_color="green3", text_color="white")  # Highlight active mode
-        self.text_mode_button.configure(fg_color="cornsilk4", text_color="black")  # Reset other button
-
-    def setup_widgets(self):
-        # PDF Folder Entry
-        self.pdf_folder_entry = ctk.CTkEntry(self.root, width=270, height=20, font=(BUTTON_FONT, 9),
-                                             placeholder_text="Select Folder with PDFs", border_width=1,
-                                             corner_radius=3)
-        self.pdf_folder_entry.place(x=50, y=10)
-        self.pdf_folder_button = ctk.CTkButton(self.root, text="...", command=self.browse_pdf_folder,
-                                               font=(BUTTON_FONT, 9),
-                                               width=25, height=10)
-        self.pdf_folder_button.place(x=20, y=10)
-
-
-        # Zoom Slider
-        self.zoom_var = ctk.DoubleVar(value=self.pdf_viewer.current_zoom)  # Initialize with the current zoom level
-        self.zoom_slider = ctk.CTkSlider(self.root, from_=0.1, to=3.5, variable=self.zoom_var,
-                                         command=self.update_zoom, width=155)
-        self.zoom_slider.place(x=420, y=70)
-
-        # Open Sample PDF Button
-        self.open_sample_button = ctk.CTkButton(self.root, text="Open PDF", command=self.open_sample_pdf,
-                                                font=(BUTTON_FONT, 9),
-                                                width=25, height=10)
-        self.open_sample_button.place(x=20, y=35)
-
-        # Recent PDF Button
-        self.recent_pdf_button = ctk.CTkButton(self.root, text="Recent", command=self.open_recent_pdf,
-                                               font=(BUTTON_FONT, 9), width=40, height=10)
-        self.recent_pdf_button.place(x=87, y=35)
-
-        # Close PDF Button
-        self.close_pdf_button = ctk.CTkButton(self.root, text="x", command=self.close_pdf,
-                                              font=(BUTTON_FONT, 9), width=10, height=10, fg_color="red2")
-        self.close_pdf_button.place(x=143, y=35)
-
-        # Output Excel Path
-        self.output_path_entry = ctk.CTkEntry(self.root, width=270, height=20, font=(BUTTON_FONT, 9),
-                                              placeholder_text="Select Folder for Excel output",
-                                              border_width=1, corner_radius=3)
-        self.output_path_entry.place(x=50, y=60)
-        self.output_path_button = ctk.CTkButton(self.root, text="...", command=self.browse_output_path,
-                                                font=(BUTTON_FONT, 9),
-                                                width=25, height=10)
-        self.output_path_button.place(x=20, y=60)
-
-        # Include Subfolders Checkbox
-        self.include_subfolders_var = ctk.IntVar()
-        self.include_subfolders_checkbox = ctk.CTkCheckBox(self.root, text="Include Subfolders?",
-                                                           variable=self.include_subfolders_var,
-                                                           command=self.toggle_include_subfolders,
-                                                           font=(BUTTON_FONT, 9),checkbox_width=17, checkbox_height=17)
-        self.include_subfolders_checkbox.place(x=192, y=34)
-
-
-        # Areas Treeview setup
-        self.areas_frame = ctk.CTkFrame(self.root, height=1, width=200, border_width=0)
-        self.areas_frame.place(x=-425, y=-10)
-
-        self.areas_tree = EditableTreeview(
-            self,
-            self.areas_frame,
-            columns=("Title", "x0", "y0", "x1", "y1"),  # Ensure "Title" is included
-            show="headings",
-            height=3
-        )
-
-        # Set up static headers and fixed column widths
-        self.areas_tree.heading("Title", text="Title")
-        self.areas_tree.column("Title", width=50, anchor="center")
-        for col in ("x0", "y0", "x1", "y1"):
-            self.areas_tree.heading(col, text=col)
-            self.areas_tree.column(col, width=45, anchor="center")
-
-        # Pack the Treeview into the frame
-        self.areas_tree.pack(side="left")
-
-        # Import, Export, and Clear Areas Buttons
-        self.import_button = ctk.CTkButton(self.root, text="Import", command=self.import_from_excel,
-                                           font=(BUTTON_FONT, 9), width=88, height=10)
-        self.import_button.place(x=670, y=15)
-
-        self.export_button = ctk.CTkButton(self.root, text="Export", command=self.export_to_excel,
-                                           font=(BUTTON_FONT, 9), width=88, height=10)
-        self.export_button.place(x=670, y=40)
-
-        self.clear_areas_button = ctk.CTkButton(self.root, text="Clear All", command=self.clear_all_areas,
-                                                font=(BUTTON_FONT, 9), width=88, height=10)
-        self.clear_areas_button.place(x=670, y=65)
-
-        self.mode_label = ctk.CTkLabel(self.root, text="MODE:", font=(BUTTON_FONT, 9))
-        self.mode_label.place(x=337, y=0)
-
-        self.text_mode_button = ctk.CTkButton(self.root, text="Text", command=self.toggle_text_mode,
-                                              font=(BUTTON_FONT, 10), width=80, height=25)
-        self.text_mode_button.place(x=330, y=24)
-
-        self.deletion_mode_button = ctk.CTkButton(self.root, text="Redact", command=self.toggle_deletion_mode,
-                                                  font=(BUTTON_FONT, 10), width=80, height=25)
-        self.deletion_mode_button.place(x=330, y=54)
-
-        # Font Style Dropdown
-        self.font_style_var = StringVar(value="Helvetica")  # Default font
-        self.font_styles = list(pymupdf.Base14_fontdict.values())  # Base-14 font styles
-        self.font_style_menu = ctk.CTkOptionMenu(
-            self.root, dynamic_resizing=False,
-            values=self.font_styles,
-            variable=self.font_style_var,
-            font=(BUTTON_FONT, 9),
-            width=88,
-            height=18
-        )
-        self.font_style_menu.place(x=480, y=19)  # Adjust position as needed
-        self.font_label = ctk.CTkLabel(self.root, text="Font Style:", font=(BUTTON_FONT, 9))
-        self.font_label.place(x=420, y=14)
-
-        # Font Size Textbox
-        self.font_size_var = StringVar(value="9")  # Default font size
-        self.font_size_entry = ctk.CTkEntry(
-            self.root,
-            textvariable=self.font_size_var,
-            font=(BUTTON_FONT, 9),
-            width=40,
-            height=20
-        )
-        self.font_size_entry.place(x=480, y=43)  # Adjust position as needed
-        self.size_label = ctk.CTkLabel(self.root, text="Font Size:", font=(BUTTON_FONT, 9))
-        self.size_label.place(x=423, y=38)
-
-
-        # Process Button
-        self.extract_button = ctk.CTkButton(self.root, text="PROCESS", font=("Arial Black", 12),
-                                            corner_radius=10, width=75, height=75, command=self.start_processing)
-        self.extract_button.place(x=575, y=15)
-
-
-        # Version Label with Tooltip
-        self.version_label = ctk.CTkLabel(self.root, text=VERSION_TEXT, fg_color="transparent",
-                                          text_color="gray59",
-                                          font=(BUTTON_FONT, 9.5))
-        self.version_label.place(x=835, y=5)
-        self.version_label.bind("<Button-1>", self.display_version_info)
-
     def setup_bindings(self):
         self.pdf_folder_entry.bind("<KeyRelease>", self.update_pdf_folder)
         self.output_path_entry.bind("<KeyRelease>", self.update_output_path)
         self.root.bind("<Configure>", self.on_window_resize)
+
+    def toggle_revision_updater(self):
+        """Enables or disables the revision updater mode."""
+        is_enabled = self.revision_updater_var.get() == 1
+        state = "normal" if is_enabled else "disabled"
+
+        self.clipping_area_button.configure(state=state)
+        self.rev_area_button.configure(state=state)
+        self.date_entry.configure(state=state)  # Enable/disable Date entry
+        self.description_entry.configure(state=state)
+
+    def toggle_text_mode(self):
+        self.pdf_viewer.set_mode(TEXT_MODE)
+
+        # Update button states
+        self.text_mode_button.configure(fg_color="green4", text_color="white")
+        self.deletion_mode_button.configure(fg_color="cornsilk4", text_color="black")
+        self.clipping_area_button.configure(fg_color="cornsilk4", text_color="black")
+        self.rev_area_button.configure(fg_color="cornsilk4", text_color="black")
+
+    def toggle_deletion_mode(self):
+        self.pdf_viewer.set_mode(REDACTION_MODE)
+
+        # Update button states
+        self.text_mode_button.configure(fg_color="cornsilk4", text_color="black")
+        self.deletion_mode_button.configure(fg_color="green3", text_color="white")
+        self.clipping_area_button.configure(fg_color="cornsilk4", text_color="black")
+        self.rev_area_button.configure(fg_color="cornsilk4", text_color="black")
+
+    def set_clipping_area(self):
+        self.pdf_viewer.set_mode(TABLE_COORDINATES_MODE)
+
+        # Update button states
+        self.text_mode_button.configure(fg_color="cornsilk4", text_color="black")
+        self.deletion_mode_button.configure(fg_color="cornsilk4", text_color="black")
+        self.clipping_area_button.configure(fg_color="green4", text_color="white")
+        self.rev_area_button.configure(fg_color="cornsilk4", text_color="black")
+
+    def set_revision_area(self):
+        self.pdf_viewer.set_mode(REVISION_COORDINATES_MODE)
+
+        # Update button states
+        self.text_mode_button.configure(fg_color="cornsilk4", text_color="black")
+        self.deletion_mode_button.configure(fg_color="cornsilk4", text_color="black")
+        self.clipping_area_button.configure(fg_color="cornsilk4", text_color="black")
+        self.rev_area_button.configure(fg_color="green4", text_color="white")
 
     def setup_tooltips(self):
         create_tooltip(self.pdf_folder_entry, "Select the main folder containing PDF files")
@@ -456,6 +555,16 @@ class ReidactorGUI:
                                                orientation="horizontal", width=250)
         self.progress_bar.pack(pady=10)
 
+        # Fetch the Date and Description values from the text boxes
+        date_value = self.date_entry.get()
+        description_value = self.description_entry.get()
+
+        # Validation: Ensure values are provided
+        if not date_value or not description_value:
+            messagebox.showerror("Missing Information",
+                                 "Please provide both Date and Description for the revision updater.")
+            return
+
         manager = multiprocessing.Manager()
         progress_list = manager.list()
         total_files = manager.Value('i', 0)
@@ -465,7 +574,11 @@ class ReidactorGUI:
             output_excel_path=self.output_excel_path,
             areas=self.pdf_viewer.areas,
             insertion_points=self.pdf_viewer.insertion_points,
-            include_subfolders=self.include_subfolders
+            include_subfolders=self.include_subfolders,
+            table_coordinates = self.pdf_viewer.table_coordinates,
+            rev_coordinates = self.pdf_viewer.rev_coordinates,
+            revision_date=date_value,
+            revision_description=description_value
         )
 
         pdf_files = processor1.get_pdf_files()
@@ -515,7 +628,6 @@ class ReidactorGUI:
                 self.root.after(100, self.update_progress, progress_list, total_files, pool)
         except Exception as e:
             print(f"Error updating progress: {e}")
-
 
     def on_window_resize(self, event):
         """Handles window resizing and adjusts the canvas dimensions."""

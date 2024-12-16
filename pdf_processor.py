@@ -9,8 +9,15 @@ from functools import partial
 from utils import adjust_coordinates_for_rotation, adjust_point_for_rotation
 
 class PDFProcessor:
-    def __init__(self, pdf_folder, output_excel_path, areas, insertion_points, include_subfolders):
+    def __init__(self, pdf_folder, output_excel_path, areas, insertion_points, include_subfolders, table_coordinates, rev_coordinates,revision_date, revision_description):
+
         self.insertion_points = insertion_points  # Store insertion points
+
+        self.table_coordinates = table_coordinates  # Add table coordinates
+        self.rev_coordinates = rev_coordinates  # Add revision coordinates
+        self.revision_date = revision_date  # Store Date
+        self.revision_description = revision_description
+
 
         self.pdf_folder = pdf_folder
         self.output_excel_path = output_excel_path
@@ -68,17 +75,46 @@ class PDFProcessor:
         except Exception as e:
             print(f"Error during extraction: {e}")
 
+
+    def insert_revision_row(self, page, table, new_row, latest_revision_index):
+            """Insert a new revision row using precise cell bounding boxes."""
+            cell_text = table.extract()  # Extract table contents
+            cell_boxes = [[cell for cell in row.cells] for row in table.rows]  # Get cell bounding boxes
+
+            num_cols = len(cell_text[0]) if cell_text else 0
+            insert_row_index = latest_revision_index - 1
+
+            if insert_row_index < 0:
+                print("No valid row for insertion.")
+                return
+
+            for col_index, cell_content in enumerate(new_row):
+                if col_index < num_cols:
+                    cell_box = cell_boxes[insert_row_index][col_index]
+                    x0, y0, x1, y1 = cell_box
+                    text_x0 = x0 + 2  # Adjust offset for better placement
+                    text_y1 = y1 + 50
+                    rect = fitz.Rect(text_x0, y0, x1, text_y1)
+
+                    # Insert text into the cell
+                    page.insert_textbox(
+                        rect,
+                        cell_content,
+                        fontsize=8,
+                        fontname="helv",
+                        align=0  # Left-aligned
+                    )
+
+
     def process_single_pdf(self, input_pdf_path, progress_list=None):
         """Redacts specified areas in a single PDF file."""
         try:
-            # Generate output path
             output_pdf_path = self.get_output_path(input_pdf_path)
-
-            # Open the PDF
             doc = fitz.open(input_pdf_path)
 
             for page in doc:
-                # Apply redactions for each area
+                page.remove_rotation()
+
                 for area in self.areas:
                     coordinates = area["coordinates"]
                     adjusted_coordinates = adjust_coordinates_for_rotation(
@@ -87,10 +123,8 @@ class PDFProcessor:
                     rect = fitz.Rect(*adjusted_coordinates)
                     page.add_redact_annot(rect)
 
-                # Apply the redactions on the page
                 page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE | 0, graphics=fitz.PDF_REDACT_LINE_ART_NONE | 0)
 
-                # Insert text into the PDF
                 for insertion in self.insertion_points:
                     original_x, original_y = insertion['position']
                     adjusted_x, adjusted_y = adjust_point_for_rotation(
@@ -102,8 +136,6 @@ class PDFProcessor:
                     text = insertion['text']
                     font = insertion['font']
                     size = insertion['size']
-
-                    # Insert the text into the PDF page
                     page.insert_text(
                         (adjusted_x, adjusted_y),
                         text,
@@ -112,7 +144,48 @@ class PDFProcessor:
                         rotate=page.rotation
                     )
 
-            # Save the redacted PDF
+
+                # Revision updater logic
+                tables = page.find_tables(clip=self.table_coordinates, strategy="lines")
+                if not tables.tables:  # Check if the tables list is empty
+                    print("No tables found, skipping page.")
+                    continue
+
+                if tables.tables:  # Check if there are any tables
+                    for tab in tables.tables:
+                        cell_text = tab.extract()
+                        if not cell_text:
+                            print("Empty table data, skipping table.")
+                            continue
+
+                        latest_revision_index, last_revision = None, None
+                        for row_index, row in enumerate(cell_text):
+                            if row[0] and row[0].startswith("P"):
+                                latest_revision_index = row_index
+                                last_revision = row[0]
+                                break
+
+                        if latest_revision_index is not None and last_revision is not None:
+                            try:
+                                last_revision_number = int(last_revision[1:])
+                                next_revision = f"P{last_revision_number + 1:02d}"
+                                new_row = [next_revision, self.revision_date, self.revision_description, "", ""]
+                                self.insert_revision_row(page, tab, new_row, latest_revision_index)
+
+                                # Redact and update revision area
+                                page.add_redact_annot(fitz.Rect(*self.rev_coordinates))
+                                page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE, graphics=fitz.PDF_REDACT_LINE_ART_NONE)
+                                page.insert_textbox(
+                                    fitz.Rect(*self.rev_coordinates),
+                                    next_revision,
+                                    fontsize=8,
+                                    fontname="helv",
+                                    color=(0, 0, 0),
+                                    align=1
+                                )
+                            except ValueError as e:
+                                print(f"Revision processing error: {e}")
+
             doc.save(output_pdf_path)
 
             if progress_list is not None:

@@ -1,6 +1,6 @@
 # constants.py
 
-VERSION_TEXT = "Version 0.241201-01"
+VERSION_TEXT = "Version 0.241201-02"
 
 # Application settings
 INITIAL_WIDTH = 965
@@ -18,6 +18,13 @@ SCROLL_MARGIN = 20  # Distance from the canvas edge to start scrolling
 SCROLL_INCREMENT_THRESHOLD = 3  # Adjust this for slower/faster auto-scroll
 scroll_counter = 0  # This will be updated in your main code
 RESIZE_DELAY = 700  # milliseconds delay
+
+#modes
+TEXT_MODE = "text_mode"
+REDACTION_MODE = "redaction_mode"
+TABLE_COORDINATES_MODE = "table_coordinates"
+REVISION_COORDINATES_MODE = "rev_coordinates"
+
 
 
 FONT_MAPPING = {

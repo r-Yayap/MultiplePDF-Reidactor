@@ -1,4 +1,7 @@
+#revision_updater.py
+
 import os
+
 import pymupdf as fitz  # PyMuPDF
 from multiprocessing import Pool, Manager
 import logging
@@ -10,7 +13,7 @@ input_pdf_folder = r'C:\Users\dae0519\Desktop\TestHaven'
 output_pdf_folder = r'C:\Users\dae0519\Desktop\TestHaven-output'
 
 
-coordinates = [2068, 829.5, 2331, 1000]  # [x0, y0, x1, y1]
+table_coordinates = [2068, 829.5, 2331, 1000]  # [x0, y0, x1, y1]
 rev_coordinates = [2298, 1613, 2326, 1640]
 
 # Configure logging
@@ -72,7 +75,7 @@ def process_pdf(input_path, output_path, results):
             page.remove_rotation()
             # print(f"Processing page {page_number + 1} of {input_path}...")
 
-            tables = page.find_tables(clip=coordinates, strategy="lines")  # Detect tables
+            tables = page.find_tables(clip=table_coordinates, strategy="lines")  # Detect tables
 
             if not tables:
                 logging.warning(f"No tables found on page {page_number + 1} of {input_path}.")
@@ -132,6 +135,7 @@ def process_pdf(input_path, output_path, results):
     except Exception as e:
         logging.error(f"Error processing {input_path}: {e}")
         results.put(("failed", input_path))  # Send failure to results queue
+
 
 def process_all_pdfs(input_folder, output_folder):
     """Process all PDF files in the input folder using multiprocessing."""

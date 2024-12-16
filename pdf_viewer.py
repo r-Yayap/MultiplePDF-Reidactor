@@ -9,9 +9,12 @@ from tkinter.simpledialog import askstring  # For custom title input
 
 class PDFViewer:
     def __init__(self, parent, master):
-        self.parent = parent  # `parent` is the XtractorGUI instance
+        self.parent = parent
+
         self.canvas = ctk.CTkCanvas(master, width=CANVAS_WIDTH, height=CANVAS_HEIGHT)
         self.canvas.place(x=10, y=100)
+
+
 
         # Detect and store the system DPI
         self.system_dpi = self.detect_system_dpi()
@@ -30,7 +33,7 @@ class PDFViewer:
         self.current_zoom = CURRENT_ZOOM
         self.areas = []
         self.rectangle_list = []
-        self.current_rectangle = None
+
         self.original_coordinates = None
         self.canvas_image = None  # Holds the current PDF page image to prevent garbage collection
         self.resize_job = None  # Track the delayed update job
@@ -40,7 +43,11 @@ class PDFViewer:
         self.selected_rectangle_id = None
         self.rectangle_titles = {}  # Dictionary to store {rectangle_id: title}
 
-        self.mode = None  # Modes: None, 'deletion', 'insertion'
+        self.mode = None
+        self.table_coordinates = None
+        self.rev_coordinates = None
+        self.current_rectangle = None
+
         self.insertion_points = []  # List to store insertion points and texts
 
         # Create main context menu
@@ -305,50 +312,81 @@ class PDFViewer:
         # Update any rectangle overlays or additional graphics
         self.update_rectangles()
 
+    def set_mode(self, mode):
+        """Set the active mode and bind appropriate events."""
+        self.canvas.unbind("<ButtonPress-1>")
+        self.canvas.unbind("<B1-Motion>")
+        self.canvas.unbind("<ButtonRelease-1>")
+        self.canvas.unbind("<Button-1>")
+
+        self.mode = mode
+        self.current_rectangle = None
+
+        if mode == TEXT_MODE:
+            self.canvas.bind("<Button-1>", self.add_insertion_point)
+            print("Text mode activated.")
+        elif mode == REDACTION_MODE:
+            self.canvas.bind("<ButtonPress-1>", self.start_rectangle)
+            self.canvas.bind("<B1-Motion>", self.draw_rectangle)
+            self.canvas.bind("<ButtonRelease-1>", self.end_rectangle)
+            print("Redaction mode activated.")
+        elif mode in [TABLE_COORDINATES_MODE, REVISION_COORDINATES_MODE]:
+            self.canvas.bind("<ButtonPress-1>", self.start_rectangle)
+            self.canvas.bind("<B1-Motion>", self.draw_rectangle)
+            self.canvas.bind("<ButtonRelease-1>", self.end_rectangle)
+            print(f"{mode.capitalize()} mode activated.")
+
     def start_rectangle(self, event):
-        """Begins the rectangle selection process on mouse press."""
-        x, y = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
-        self.original_coordinates = [x, y]
-        self.current_rectangle = self.canvas.create_rectangle(x, y, x, y, outline="red", width=2)
+        """Starts drawing a rectangle on the canvas."""
+        print(f"Start rectangle called in mode: {self.mode}")
+        if self.mode in [TABLE_COORDINATES_MODE, REVISION_COORDINATES_MODE, REDACTION_MODE]:
+            self.original_coordinates = (self.canvas.canvasx(event.x), self.canvas.canvasy(event.y))
+            self.current_rectangle = self.canvas.create_rectangle(*self.original_coordinates,
+                                                                  *self.original_coordinates, outline="purple", width=2)
+            print(f"Rectangle started at: {self.original_coordinates}")
 
     def draw_rectangle(self, event):
         """Adjusts the rectangle dimensions as the mouse is dragged."""
         if self.current_rectangle:
+            print(f"Dragging rectangle: Current mode {self.mode}")
             x, y = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
+            print(f"Dragging to: {x}, {y}")
             self.canvas.coords(self.current_rectangle, self.original_coordinates[0], self.original_coordinates[1], x, y)
-            self.auto_scroll_canvas(event.x, event.y)
 
     def end_rectangle(self, event):
-        """Finalizes the rectangle selection and saves its coordinates."""
+        """Finalizes the rectangle and assigns it based on the mode."""
         if self.current_rectangle:
-            x, y = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
-            self.canvas.coords(self.current_rectangle, self.original_coordinates[0], self.original_coordinates[1], x, y)
+            x0, y0 = self.original_coordinates
+            x1, y1 = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
+            print(f"End rectangle: {x0}, {y0}, {x1}, {y1}")
 
-            bbox = self.canvas.bbox(self.current_rectangle)
-            if bbox:
-                x0, y0, x1, y1 = bbox
-                adjusted_coordinates = [
-                    x0 / self.current_zoom,
-                    y0 / self.current_zoom,
-                    x1 / self.current_zoom,
-                    y1 / self.current_zoom
-                ]
+            if self.mode == TABLE_COORDINATES_MODE:
+                # Adjust table coordinates for PDF units
+                self.table_coordinates = [x0 / self.current_zoom, y0 / self.current_zoom,
+                                          x1 / self.current_zoom, y1 / self.current_zoom]
+                print(f"Table coordinates set: {self.table_coordinates}")
+                self.rectangle_list.append(self.current_rectangle)  # Keep the rectangle visible
 
-                # Add rectangle entry with default title based on its position
-                self.areas.append({
-                    "coordinates": adjusted_coordinates,
-                    "title": f"Rectangle {len(self.areas) + 1}"  # Default title based on position
-                })
-                self.rectangle_list.append(self.current_rectangle)
+            elif self.mode == REVISION_COORDINATES_MODE:
+                # Adjust revision coordinates for PDF units
+                self.rev_coordinates = [x0 / self.current_zoom, y0 / self.current_zoom,
+                                        x1 / self.current_zoom, y1 / self.current_zoom]
+                print(f"Revision coordinates set: {self.rev_coordinates}")
+                self.rectangle_list.append(self.current_rectangle)  # Keep the rectangle visible
 
-                # Update the Treeview to show this new rectangle with its default title
-                self.parent.update_areas_treeview()
-                print("Updated Areas List:", self.areas)
-            else:
-                print("Error: Failed to retrieve bounding box coordinates")
+            elif self.mode == REDACTION_MODE:
+                # Adjust redaction area for PDF units
+                adjusted_coords = [x0 / self.current_zoom, y0 / self.current_zoom,
+                                   x1 / self.current_zoom, y1 / self.current_zoom]
+                self.areas.append({"coordinates": adjusted_coords, "title": "Redaction Area"})
+                self.rectangle_list.append(self.current_rectangle)  # Keep the rectangle visible
+                print(f"Redaction area added: {adjusted_coords}")
 
-        # Clear the current rectangle reference
-        self.current_rectangle = None
+            # Call update_rectangles to refresh the canvas
+            self.update_rectangles()
+
+            self.current_rectangle = None
+
 
     def auto_scroll_canvas(self, x, y):
         """Auto-scrolls the canvas if the mouse is near the edges during a drag operation."""
@@ -411,13 +449,26 @@ class PDFViewer:
             self.canvas.delete(rect_id)
         self.rectangle_list.clear()
 
-        # Redraw rectangles based on the updated `self.areas` list
+        # Redraw rectangles for redaction areas
         for rect_info in self.areas:
             x0, y0, x1, y1 = [coord * self.current_zoom for coord in rect_info["coordinates"]]
-
             # Draw the rectangle on the canvas
             rect_id = self.canvas.create_rectangle(x0, y0, x1, y1, outline="red", width=2)
             self.rectangle_list.append(rect_id)
+
+        # Draw rectangle for table coordinates
+        if self.table_coordinates:
+            x0, y0, x1, y1 = [coord * self.current_zoom for coord in self.table_coordinates]
+            rect_id = self.canvas.create_rectangle(x0, y0, x1, y1, outline="blue", width=2, dash=(20, 5))
+            self.rectangle_list.append(rect_id)
+            print(f"Table coordinates rectangle drawn: {self.table_coordinates}")
+
+        # Draw rectangle for revision coordinates
+        if self.rev_coordinates:
+            x0, y0, x1, y1 = [coord * self.current_zoom for coord in self.rev_coordinates]
+            rect_id = self.canvas.create_rectangle(x0, y0, x1, y1, outline="green", width=2, dash=(4, 2))
+            self.rectangle_list.append(rect_id)
+            print(f"Revision coordinates rectangle drawn: {self.rev_coordinates}")
 
         # Update the Treeview in the main GUI
         self.parent.update_areas_treeview()
