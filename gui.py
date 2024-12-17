@@ -535,7 +535,7 @@ class ReidactorGUI:
     def start_processing(self):
         self.start_time = time.time()
 
-        self.pdf_viewer.close_pdf()  # Ensure no open files interfere
+        self.pdf_viewer.close_pdf()
 
         # Setup progress window
         self.progress_window = ctk.CTkToplevel(self.root)
@@ -575,11 +575,20 @@ class ReidactorGUI:
             areas=self.pdf_viewer.areas,
             insertion_points=self.pdf_viewer.insertion_points,
             include_subfolders=self.include_subfolders,
-            table_coordinates = self.pdf_viewer.table_coordinates,
-            rev_coordinates = self.pdf_viewer.rev_coordinates,
+            table_coordinates=self.pdf_viewer.table_coordinates,
+            rev_coordinates=self.pdf_viewer.rev_coordinates,
             revision_date=date_value,
             revision_description=description_value
         )
+
+        processor1.setup_logging()
+        log_file = processor1.log_file
+        print(f"Logs are being saved to: {log_file}")
+
+        manager = multiprocessing.Manager()
+        progress_list = manager.list()
+        error_files = manager.list()  # Track files with errors
+        total_files = manager.Value('i', 0)
 
         pdf_files = processor1.get_pdf_files()
         total_files.value = len(pdf_files)
@@ -590,42 +599,45 @@ class ReidactorGUI:
             return
 
         pool = multiprocessing.Pool()
-        process_func = partial(processor1.process_single_pdf, progress_list=progress_list)
+        process_func = partial(processor1.process_single_pdf, log_file=log_file, error_files=error_files, progress_list=progress_list)
         pool.map_async(process_func, pdf_files)
 
-        self.root.after(100, self.update_progress, progress_list, total_files, pool)
+        self.root.after(100, self.update_progress, progress_list, total_files, error_files, pool)
 
-    def update_progress(self, progress_list, total_files, pool):
-        """Updates the progress bar based on the progress of PDF extraction."""
+    def update_progress(self, progress_list, total_files, error_files, pool):
         try:
-            # Avoid division by zero
             if total_files.value > 0:
                 current_progress = len(progress_list) / total_files.value
                 self.progress_var.set(current_progress)
 
-                # Update the progress label with the number of files processed
                 progress_text = f"Processed {len(progress_list)} of {total_files.value} files."
-                self.total_files_label.configure(text=progress_text)  # Update the title or add a label to display progress
+                self.total_files_label.configure(text=progress_text)
 
-            # Check if all tasks in the pool are complete
-            if not pool._cache:  # Pool tasks are done when the cache is empty
-                self.progress_var.set(1)  # Ensure progress bar is complete
-                self.progress_window.destroy()  # Close progress window
+            if not pool._cache:  # All tasks complete
+                self.progress_var.set(1)
+                self.progress_window.destroy()
 
-                # Calculate and display elapsed time
+                # Calculate elapsed time
                 end_time = time.time()
                 elapsed_time = end_time - self.start_time
                 formatted_time = time.strftime("%H:%M:%S", time.gmtime(elapsed_time))
 
-                response = messagebox.askyesno(
-                    "Processing Complete",
-                    f"PDF processing completed successfully in {formatted_time}.\nWould you like to open the output folder?"
+                # Summary message
+                error_count = len(error_files)
+                summary_message = (
+                        f"Total Files Processed: {total_files.value}\n"
+                        f"Files with Errors: {error_count}\n"
+                        f"Time Elapsed: {formatted_time}\n\n"
+                        "Files with Errors:\n" + "\n".join(error_files)
                 )
-                if response:
-                    os.startfile(self.output_excel_path)
+
+                # Display summary and open log file
+                messagebox.showinfo("Processing Summary", summary_message)
+                print(f"Processing completed. Logs saved to {processor1.log_file}.")
+                os.startfile(processor1.log_file)
+
             else:
-                # Continue monitoring progress
-                self.root.after(100, self.update_progress, progress_list, total_files, pool)
+                self.root.after(100, self.update_progress, progress_list, total_files, error_files, pool)
         except Exception as e:
             print(f"Error updating progress: {e}")
 

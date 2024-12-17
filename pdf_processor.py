@@ -3,7 +3,8 @@
 import os
 import re
 import pymupdf as fitz
-
+import logging
+from datetime import datetime
 import multiprocessing
 from functools import partial
 from utils import adjust_coordinates_for_rotation, adjust_point_for_rotation
@@ -18,6 +19,7 @@ class PDFProcessor:
         self.revision_date = revision_date  # Store Date
         self.revision_description = revision_description
 
+        self.log_file = None  # Log file will be set during setup_logging()
 
         self.pdf_folder = pdf_folder
         self.output_excel_path = output_excel_path
@@ -29,6 +31,24 @@ class PDFProcessor:
 
         if not os.path.exists(self.temp_image_folder):
             os.makedirs(self.temp_image_folder)
+
+    def setup_logging(self):
+        """Configures the logging module with a dynamic log file name."""
+        log_folder = "logs"  # Define a folder for logs
+        os.makedirs(log_folder, exist_ok=True)
+
+        current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        self.log_file = os.path.join(log_folder, f"error_log_{current_time}.txt")
+
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s - %(levelname)s - %(message)s",
+            handlers=[
+                logging.FileHandler(self.log_file, mode='w'),
+                logging.StreamHandler()
+            ]
+        )
+        print(f"Logging initialized. Log file: {self.log_file}")
 
     def clean_text(self, text):
         """Cleans text by replacing newlines, stripping, and removing illegal characters."""
@@ -48,13 +68,16 @@ class PDFProcessor:
 
     def start_processing(self, progress_list, total_files):
         """Extracts text from PDFs using multiprocessing and updates the progress list."""
+        log_file = self.setup_logging()  # Call logging setup
+        logging.info(f"Logging started. Log file: {log_file}")
+
         try:
             # Gather all PDF files in the specified folder
             pdf_files = self.get_pdf_files()
             total_files.value = len(pdf_files)
 
             if not pdf_files:
-                print("No PDF files found in the specified folder.")
+                logging.warning("No PDF files found in the specified folder.")
                 return
 
             # Create a multiprocessing pool
@@ -72,9 +95,10 @@ class PDFProcessor:
             pool.close()
             pool.join()
 
-        except Exception as e:
-            print(f"Error during extraction: {e}")
+            logging.info(f"Processed {len(progress_list)} out of {len(pdf_files)} PDFs.")
 
+        except Exception as e:
+            logging.error(f"Error during processing: {e}")
 
     def insert_revision_row(self, page, table, new_row, latest_revision_index):
             """Insert a new revision row using precise cell bounding boxes."""
@@ -85,7 +109,7 @@ class PDFProcessor:
             insert_row_index = latest_revision_index - 1
 
             if insert_row_index < 0:
-                print("No valid row for insertion.")
+                logging.warning("No valid row for insertion.")
                 return
 
             for col_index, cell_content in enumerate(new_row):
@@ -105,9 +129,15 @@ class PDFProcessor:
                         align=0  # Left-aligned
                     )
 
+    def process_single_pdf(self, input_pdf_path, log_file, error_files, progress_list=None):
+        """Reconfigures logging and processes a single PDF file."""
 
-    def process_single_pdf(self, input_pdf_path, progress_list=None):
-        """Redacts specified areas in a single PDF file."""
+        logging.basicConfig(
+            level=logging.WARNING,  # Log only warnings and errors
+            format="%(asctime)s - %(levelname)s - %(message)s",
+            handlers=[logging.FileHandler(log_file, mode='a')]
+        )
+
         try:
             output_pdf_path = self.get_output_path(input_pdf_path)
             doc = fitz.open(input_pdf_path)
@@ -148,14 +178,14 @@ class PDFProcessor:
                 # Revision updater logic
                 tables = page.find_tables(clip=self.table_coordinates, strategy="lines")
                 if not tables.tables:  # Check if the tables list is empty
-                    print("No tables found, skipping page.")
+                    logging.warning(f"No tables found on page {page.number + 1} of {input_pdf_path}.")
                     continue
 
                 if tables.tables:  # Check if there are any tables
                     for tab in tables.tables:
                         cell_text = tab.extract()
                         if not cell_text:
-                            print("Empty table data, skipping table.")
+                            logging.warning(f"Empty table data on page {page.number + 1}.")
                             continue
 
                         latest_revision_index, last_revision = None, None
@@ -186,13 +216,14 @@ class PDFProcessor:
                             except ValueError as e:
                                 print(f"Revision processing error: {e}")
 
-            doc.save(output_pdf_path)
 
+            doc.save(output_pdf_path)
             if progress_list is not None:
                 progress_list.append(input_pdf_path)
 
         except Exception as e:
-            print(f"Error processing {input_pdf_path}: {e}")
+            logging.error(f"Error processing {input_pdf_path}: {e}")
+            error_files.append(input_pdf_path)  # Add to error list
 
     def get_pdf_files(self):
         """Gathers all PDF files within the specified folder."""
