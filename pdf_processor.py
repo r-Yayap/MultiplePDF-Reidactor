@@ -197,9 +197,18 @@ class PDFProcessor:
 
                         if latest_revision_index is not None and last_revision is not None:
                             try:
+
+                                # Extract the previous values for columns 4 and 5
+                                previous_col4 = cell_text[latest_revision_index][3] if len(cell_text[latest_revision_index]) > 3 else ""
+                                previous_col5 = cell_text[latest_revision_index][4] if len(cell_text[latest_revision_index]) > 4 else ""
+
+                                # Increment revision number and create new revision row
                                 last_revision_number = int(last_revision[1:])
                                 next_revision = f"P{last_revision_number + 1:02d}"
-                                new_row = [next_revision, self.revision_date, self.revision_description, "", ""]
+                                new_row = [next_revision, self.revision_date, self.revision_description, previous_col4,
+                                           previous_col5]
+
+                                # Insert the new row
                                 self.insert_revision_row(page, tab, new_row, latest_revision_index)
 
                                 # Redact and update revision area
