@@ -559,11 +559,12 @@ class ReidactorGUI:
         date_value = self.date_entry.get()
         description_value = self.description_entry.get()
 
-        # Validation: Ensure values are provided
-        if not date_value or not description_value:
-            messagebox.showerror("Missing Information",
-                                 "Please provide both Date and Description for the revision updater.")
-            return
+        # Validation: Only if the revision updater checkbox is checked
+        if self.revision_updater_var.get() == 1:
+            if not date_value or not description_value:
+                messagebox.showerror("Missing Information",
+                                     "Please provide both Date and Description for the revision updater.")
+                return
 
         manager = multiprocessing.Manager()
         progress_list = manager.list()

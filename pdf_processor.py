@@ -174,56 +174,57 @@ class PDFProcessor:
                         rotate=page.rotation
                     )
 
+                # Revision updater logic: Only run if revision updater is enabled
+                if self.revision_date and self.revision_description:
+                    # Revision updater logic
+                    tables = page.find_tables(clip=self.table_coordinates, strategy="lines")
+                    if not tables.tables:  # Check if the tables list is empty
+                        logging.warning(f"No tables found on page {page.number + 1} of {input_pdf_path}.")
+                        continue
 
-                # Revision updater logic
-                tables = page.find_tables(clip=self.table_coordinates, strategy="lines")
-                if not tables.tables:  # Check if the tables list is empty
-                    logging.warning(f"No tables found on page {page.number + 1} of {input_pdf_path}.")
-                    continue
+                    if tables.tables:  # Check if there are any tables
+                        for tab in tables.tables:
+                            cell_text = tab.extract()
+                            if not cell_text:
+                                logging.warning(f"Empty table data on page {page.number + 1}.")
+                                continue
 
-                if tables.tables:  # Check if there are any tables
-                    for tab in tables.tables:
-                        cell_text = tab.extract()
-                        if not cell_text:
-                            logging.warning(f"Empty table data on page {page.number + 1}.")
-                            continue
+                            latest_revision_index, last_revision = None, None
+                            for row_index, row in enumerate(cell_text):
+                                if row[0] and row[0].startswith("P"):
+                                    latest_revision_index = row_index
+                                    last_revision = row[0]
+                                    break
 
-                        latest_revision_index, last_revision = None, None
-                        for row_index, row in enumerate(cell_text):
-                            if row[0] and row[0].startswith("P"):
-                                latest_revision_index = row_index
-                                last_revision = row[0]
-                                break
+                            if latest_revision_index is not None and last_revision is not None:
+                                try:
 
-                        if latest_revision_index is not None and last_revision is not None:
-                            try:
+                                    # Extract the previous values for columns 4 and 5
+                                    previous_col4 = cell_text[latest_revision_index][3] if len(cell_text[latest_revision_index]) > 3 else ""
+                                    previous_col5 = cell_text[latest_revision_index][4] if len(cell_text[latest_revision_index]) > 4 else ""
 
-                                # Extract the previous values for columns 4 and 5
-                                previous_col4 = cell_text[latest_revision_index][3] if len(cell_text[latest_revision_index]) > 3 else ""
-                                previous_col5 = cell_text[latest_revision_index][4] if len(cell_text[latest_revision_index]) > 4 else ""
+                                    # Increment revision number and create new revision row
+                                    last_revision_number = int(last_revision[1:])
+                                    next_revision = f"P{last_revision_number + 1:02d}"
+                                    new_row = [next_revision, self.revision_date, self.revision_description, previous_col4,
+                                               previous_col5]
 
-                                # Increment revision number and create new revision row
-                                last_revision_number = int(last_revision[1:])
-                                next_revision = f"P{last_revision_number + 1:02d}"
-                                new_row = [next_revision, self.revision_date, self.revision_description, previous_col4,
-                                           previous_col5]
+                                    # Insert the new row
+                                    self.insert_revision_row(page, tab, new_row, latest_revision_index)
 
-                                # Insert the new row
-                                self.insert_revision_row(page, tab, new_row, latest_revision_index)
-
-                                # Redact and update revision area
-                                page.add_redact_annot(fitz.Rect(*self.rev_coordinates))
-                                page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE, graphics=fitz.PDF_REDACT_LINE_ART_NONE)
-                                page.insert_textbox(
-                                    fitz.Rect(*self.rev_coordinates),
-                                    next_revision,
-                                    fontsize=8,
-                                    fontname="helv",
-                                    color=(0, 0, 0),
-                                    align=1
-                                )
-                            except ValueError as e:
-                                print(f"Revision processing error: {e}")
+                                    # Redact and update revision area
+                                    page.add_redact_annot(fitz.Rect(*self.rev_coordinates))
+                                    page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE, graphics=fitz.PDF_REDACT_LINE_ART_NONE)
+                                    page.insert_textbox(
+                                        fitz.Rect(*self.rev_coordinates),
+                                        next_revision,
+                                        fontsize=8,
+                                        fontname="helv",
+                                        color=(0, 0, 0),
+                                        align=1
+                                    )
+                                except ValueError as e:
+                                    print(f"Revision processing error: {e}")
 
 
             doc.save(output_pdf_path)
