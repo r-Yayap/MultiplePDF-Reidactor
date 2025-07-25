@@ -248,6 +248,7 @@ class ReidactorGUI:
                     imported_areas = json.load(json_file)
                 self.pdf_viewer.areas = imported_areas  # Update the areas in the PDF viewer
                 self.pdf_viewer.update_rectangles()  # Refresh the rectangles on the canvas
+                self.pdf_viewer.update_display(force_redraw=True)
                 self.update_areas_treeview()  # Refresh the Treeview to show imported areas
                 print(f"Imported areas from {import_file_path}")
             except Exception as e:
@@ -371,6 +372,7 @@ class ReidactorGUI:
 
             # Refresh the canvas and Treeview
             self.pdf_viewer.update_rectangles()
+            self.pdf_viewer.update_display(force_redraw=True)
             self.update_areas_treeview()
 
             print(f"Imported areas, insertion points, and coordinates from {import_file_path}")
