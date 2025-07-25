@@ -6,6 +6,7 @@ import tkinter as tk
 from tkinter import Menu
 from backend.constants import *
 from tkinter.simpledialog import askstring  # For custom title input
+import tkinter.font as tkfont
 
 class PDFViewer:
     def __init__(self, parent, master):
@@ -88,6 +89,25 @@ class PDFViewer:
         self.canvas.bind("<Shift-MouseWheel>", self.handle_mousewheel)  # Shift for horizontal scroll
         self.canvas.bind("<Control-MouseWheel>", self.handle_mousewheel)  # Ctrl for zoom
 
+    # ------------------------------------------------------------
+    # Convert a PDF Base-14 face like 'Helvetica-BoldOblique'
+    # into a Tk font object with correct weight / slant
+    # ------------------------------------------------------------
+    def _get_tk_font(self, pdf_name: str, pixel_h: int):
+        """Return a Tk font whose *pixel* height equals `pixel_h`."""
+        base, w, s = "Helvetica", "normal", "roman"
+        p = pdf_name.split("-")
+        if p:
+            base = p[0]
+        if len(p) > 1:
+            mod = p[1].lower()
+            if "bold" in mod:
+                w = "bold"
+            if "italic" in mod or "oblique" in mod:
+                s = "italic"
+        # negative size → Tk interprets it as pixels not points
+        return tkfont.Font(family=base, size=-pixel_h, weight=w, slant=s)
+
     def detect_system_dpi(self):
         """Detects the system's DPI using the canvas widget."""
         try:
@@ -142,40 +162,34 @@ class PDFViewer:
 
     def add_insertion_point(self, event):
         x, y = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
-        adjusted_x = x / self.current_zoom
-        adjusted_y = y / self.current_zoom
 
-
-        print(f"{x}, {y}")
-        print(f"adjusted {adjusted_x}, {adjusted_y}")
 
         # Get font style and size
         font_style = self.parent.font_style_menu.get()
         font_size = int(self.parent.font_size_entry.get())
 
-        # Scale font size based on DPI and zoom
-        dpi_ratio = self.system_dpi / 72  # 72 is the PDF's default DPI
-        scaled_font_size = int(font_size * self.current_zoom / dpi_ratio)
+
+        pixel_h = int(font_size * self.current_zoom)
+        baseline_offset = int(pixel_h * 0.20)
 
         text = askstring("Insert Text", "Enter text to insert:")
         if text:
             # Save the insertion point with font and size
             self.insertion_points.append({
-                'position': (adjusted_x, adjusted_y),
+                'position': (x / self.current_zoom, y / self.current_zoom),
                 'text': text,
                 'font': font_style,
                 'size': font_size  # Store original size for PDF
             })
 
             # Display the text on the canvas
-            self.canvas.create_text(
-                adjusted_x, adjusted_y,
-                text=text,
-                fill="blue",
-                anchor=tk.SW,
-                font=(font_style, scaled_font_size)  # Apply scaled size for canvas
-            )
-            print(f"Added text at ({adjusted_x}, {adjusted_y}): {text}, Font: {font_style}, Size: {scaled_font_size}")
+            self.canvas.create_text(x, y + baseline_offset,
+                                    text=text,
+                                    fill="blue",
+                                    anchor=tk.SW,
+                                    font=self._get_tk_font(font_style, pixel_h))
+
+            print(f"Added text at ({x}, {y}): {text}, Font: {font_style}, Size: {pixel_h}")
 
     def set_custom_title(self):
         """Prompts user for a custom title and assigns it to the selected rectangle."""
@@ -230,8 +244,8 @@ class PDFViewer:
             # Update the display
             self.update_display()
             # Set the initial view to the top-left corner of the PDF
-            self.canvas.xview_moveto(1)  # Horizontal scroll to start
-            self.canvas.yview_moveto(1)  # Vertical scroll to start
+            self.canvas.xview_moveto(0)  # Horizontal scroll to start
+            self.canvas.yview_moveto(0)  # Vertical scroll to start
         else:
             self.pdf_document = None
             print("Error: PDF has no pages.")
@@ -291,20 +305,18 @@ class PDFViewer:
                 font_style = insertion.get('font')
                 base_font_size = insertion.get('size')
 
-                # Scale font size based on DPI and zoom
-                dpi_ratio = self.system_dpi / 72  # 72 is the PDF's default DPI
-                scaled_font_size = int(base_font_size * self.current_zoom / dpi_ratio)
+                # pixels = pt * zoom * (DPI / 72)
+                pixel_h = int(base_font_size * self.current_zoom)
 
-                adjustment = scaled_font_size * 0.3  # 20% of the font size as an estimate
+                baseline_offset = int(pixel_h * 0.20)
 
                 # Display text on the canvas
-                self.canvas.create_text(
-                    x, y+adjustment,
-                    text=text,
-                    fill="blue",
-                    anchor=tk.SW,
-                    font=(font_style, scaled_font_size)
-                )
+                self.canvas.create_text(x, y + baseline_offset,
+                                        text=text,
+                                        fill="blue",
+                                        anchor=tk.SW,
+                                        font=self._get_tk_font(font_style, pixel_h))
+
 
         except ValueError as e:
             print(f"Error updating display: {e}")
