@@ -7,6 +7,7 @@ from tkinter import Menu
 from backend.constants import *
 from tkinter.simpledialog import askstring  # For custom title input
 import tkinter.font as tkfont
+scroll_counter = 0
 
 class PDFViewer:
     def __init__(self, parent, master):
@@ -38,6 +39,8 @@ class PDFViewer:
         self.original_coordinates = None
         self.canvas_image = None  # Holds the current PDF page image to prevent garbage collection
         self.resize_job = None  # Track the delayed update job
+
+        self._last_pixmap_zoom = None  # cache for throttling redraw
 
         # Initialize selected rectangle ID and title dictionary
         self.selected_rectangle = None
@@ -83,6 +86,9 @@ class PDFViewer:
         self.selected_rectangle_id = None
         self.selected_rectangle_index = None
         self.selected_rectangle_original_color = "red"  # Default color for rectangles
+
+        self._prev_canvas_w = CANVAS_WIDTH
+        self._prev_canvas_h = CANVAS_HEIGHT
 
         # Scroll and zoom events
         self.canvas.bind("<MouseWheel>", self.handle_mousewheel)
@@ -168,10 +174,6 @@ class PDFViewer:
         font_style = self.parent.font_style_menu.get()
         font_size = int(self.parent.font_size_entry.get())
 
-
-        pixel_h = int(font_size * self.current_zoom)
-        baseline_offset = int(pixel_h * 0.20)
-
         text = askstring("Insert Text", "Enter text to insert:")
         if text:
             # Save the insertion point with font and size
@@ -183,13 +185,8 @@ class PDFViewer:
             })
 
             # Display the text on the canvas
-            self.canvas.create_text(x, y + baseline_offset,
-                                    text=text,
-                                    fill="blue",
-                                    anchor=tk.SW,
-                                    font=self._get_tk_font(font_style, pixel_h))
+            self._draw_preview(self.insertion_points[-1])
 
-            print(f"Added text at ({x}, {y}): {text}, Font: {font_style}, Size: {pixel_h}")
 
     def set_custom_title(self):
         """Prompts user for a custom title and assigns it to the selected rectangle."""
@@ -214,12 +211,12 @@ class PDFViewer:
     def zoom_in(self, increment=0.1):
         """Zoom in by increasing the current zoom level and refreshing the display."""
         self.current_zoom += increment
-        self.update_display()
+        self.update_display(force_redraw=True)
 
     def zoom_out(self, decrement=0.1):
         """Zoom out by decreasing the current zoom level and refreshing the display."""
         self.current_zoom = max(0.1, self.current_zoom - decrement)  # Prevent excessive zooming out
-        self.update_display()
+        self.update_display(force_redraw=True)
 
     def close_pdf(self):
         """Closes the displayed PDF and clears the canvas."""
@@ -242,7 +239,7 @@ class PDFViewer:
             self.pdf_width = int(self.page.rect.width)
             self.pdf_height = int(self.page.rect.height)
             # Update the display
-            self.update_display()
+            self.update_display(force_redraw=True)
             # Set the initial view to the top-left corner of the PDF
             self.canvas.xview_moveto(0)  # Horizontal scroll to start
             self.canvas.yview_moveto(0)  # Vertical scroll to start
@@ -250,12 +247,67 @@ class PDFViewer:
             self.pdf_document = None
             print("Error: PDF has no pages.")
 
-    def update_display(self):
+    def _draw_preview(self, ins):
+        """(Re-)draw a single blue preview string for one entry in self.insertion_points"""
+        x, y = [c * self.current_zoom for c in ins["position"]]
+        font_style = ins["font"]
+        pt_size = ins["size"]
+
+        pixel_h = int(pt_size * self.current_zoom)  # ❶ how high the glyphs must be
+        fnt = self._get_tk_font(font_style, pixel_h)  # ❷ get a Tk Font object
+
+        # ❸ the exact distance from baseline → bottom of bbox
+        baseline_offset = fnt.metrics("descent")
+
+        return self.canvas.create_text(
+            x, y + baseline_offset,
+            text=ins["text"],
+            fill="blue",
+            anchor=tk.SW,
+            font=fnt,
+            tags=("preview_text",),
+        )
+
+    def _update_scrollregion_only(self):
+        """Re-compute scrollregion and move preview text; no new pixmap."""
+        zoom_w = int(self.pdf_width * self.current_zoom)
+        zoom_h = int(self.pdf_height * self.current_zoom)
+        self.canvas.config(scrollregion=(0, 0, zoom_w, zoom_h))
+        # shift all preview texts to their new positions
+        for text_id, ins in zip(self.canvas.find_withtag("preview_text"),
+                                self.insertion_points):
+            x, y = [c * self.current_zoom for c in ins["position"]]
+            pixel_h = int(ins["size"] * self.current_zoom)
+            fnt = self._get_tk_font(ins["font"], pixel_h)
+            baseoff = fnt.metrics("descent")
+            self.canvas.coords(text_id, x, y + baseoff)
+            self.canvas.itemconfigure(text_id, font=fnt)  # update size too
+
+    def update_display(self, force_redraw=False):
         """Updates the canvas to display the current PDF page with zoom and scroll configurations."""
+
+        # Do we need a fresh pixmap?
+        rebuilding = (force_redraw or self._last_pixmap_zoom != self.current_zoom)
+
+        # ─── NEW LINE ───
+        if rebuilding:
+            self.canvas.delete("preview_text")
+
+            # Skip expensive pixmap rebuild if only the window size changed
+        if self._last_pixmap_zoom == self.current_zoom and not force_redraw:
+            self._update_scrollregion_only()  # we’ll add this helper below
+            return
+        self._last_pixmap_zoom = self.current_zoom
         # Only proceed if a valid page is loaded
         if not self.page:
             print("Error updating display: No valid page loaded.")
             return
+
+        self.canvas.delete("preview_text")  # wipe old layer
+
+        for ins in self.insertion_points:  # rebuild at new zoom
+            self._draw_preview(ins)
+
 
         # Set canvas dimensions based on the master window size
         canvas_width = self.canvas.master.winfo_width() - 30
@@ -276,16 +328,18 @@ class PDFViewer:
             return
 
         try:
-            # Clear any existing content on the canvas
-            self.canvas.delete("all")
-
             # Generate a pixmap from the PDF page at the current zoom level
             pix = self.page.get_pixmap(matrix=fitz.Matrix(self.current_zoom, self.current_zoom))
             img = pix.tobytes("ppm")
             img_tk = tk.PhotoImage(data=img)
 
-            # Display the updated image on the canvas
-            self.canvas.create_image(0, 0, anchor=tk.NW, image=img_tk, tags="pdf_image")
+           # Generate pixmap …
+            if self.canvas.find_withtag("pdf_image"):
+                # reuse the same image item
+                self.canvas.itemconfigure("pdf_image", image=img_tk)
+            else:
+                # first time: create it
+                self.canvas.create_image(0, 0, anchor=tk.NW, image=img_tk, tags="pdf_image")
 
             # Keep a reference to the image to prevent garbage collection
             self.canvas_image = img_tk
@@ -297,26 +351,6 @@ class PDFViewer:
             # Configure the scroll region of the canvas to match the zoomed dimensions
             self.canvas.config(yscrollcommand=self.v_scrollbar.set, xscrollcommand=self.h_scrollbar.set,
                                scrollregion=(0, 0, zoomed_width, zoomed_height))
-
-            for insertion in self.insertion_points:
-                x, y = [coord * self.current_zoom for coord in insertion['position']]
-
-                text = insertion['text']
-                font_style = insertion.get('font')
-                base_font_size = insertion.get('size')
-
-                # pixels = pt * zoom * (DPI / 72)
-                pixel_h = int(base_font_size * self.current_zoom)
-
-                baseline_offset = int(pixel_h * 0.20)
-
-                # Display text on the canvas
-                self.canvas.create_text(x, y + baseline_offset,
-                                        text=text,
-                                        fill="blue",
-                                        anchor=tk.SW,
-                                        font=self._get_tk_font(font_style, pixel_h))
-
 
         except ValueError as e:
             print(f"Error updating display: {e}")
@@ -431,6 +465,9 @@ class PDFViewer:
             self.canvas.delete(rect_id)
         self.rectangle_list.clear()
 
+        # remove blue preview texts
+        self.canvas.delete("preview_text")
+
         # Clear the areas list
         self.areas.clear()
 
@@ -446,7 +483,7 @@ class PDFViewer:
                 self.areas_tree.delete(item)
 
         # Update the canvas display to reflect changes
-        self.update_display()
+        self.update_display(force_redraw=True)
 
         # Clear the Treeview in the parent GUI
         self.parent.update_areas_treeview()
@@ -488,16 +525,14 @@ class PDFViewer:
     def set_zoom(self, zoom_level):
         """Updates the zoom level and refreshes the display."""
         self.current_zoom = zoom_level
-        self.update_display()  # Refresh the display with the new zoom level
+        self.update_display(force_redraw=True) # Refresh the display with the new zoom level
 
     def resize_canvas(self):
-        """Adjusts canvas dimensions based on the parent window size with a delay."""
+        """Schedule a lightweight resize without regenerating the pixmap."""
         if self.resize_job:
-            # Cancel any scheduled update if resizing is still happening
             self.canvas.after_cancel(self.resize_job)
-
-        # Schedule a new resize job after the delay
         self.resize_job = self.canvas.after(RESIZE_DELAY, self._perform_resize)
+
 
     def _perform_resize(self):
         """Performs the actual resize operation for the canvas."""
@@ -516,7 +551,7 @@ class PDFViewer:
         self.h_scrollbar.place_configure(x=10, y=canvas_height + 107)  # Adjust position based on new height
 
         # Refresh the PDF display to fit the new canvas size
-        self.update_display()
+        self._update_scrollregion_only()
 
     def show_context_menu(self, event):
         """Displays context menu and highlights the rectangle if right-click occurs near the edge."""
