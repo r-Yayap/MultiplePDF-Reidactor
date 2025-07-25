@@ -10,10 +10,10 @@ import customtkinter as ctk
 import pymupdf
 from openpyxl import Workbook, load_workbook
 
-from constants import *
-from pdf_processor import PDFProcessor
-from pdf_viewer import PDFViewer
-from utils import create_tooltip, EditableTreeview
+from backend.constants import *
+from backend.pdf_processor import PDFProcessor
+from frontend.pdf_viewer import PDFViewer
+from backend.utils import create_tooltip, EditableTreeview
 from functools import partial
 
 class ReidactorGUI:

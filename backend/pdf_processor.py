@@ -7,7 +7,7 @@ import logging
 from datetime import datetime
 import multiprocessing
 from functools import partial
-from utils import adjust_coordinates_for_rotation, adjust_point_for_rotation
+from backend.utils import adjust_coordinates_for_rotation, adjust_point_for_rotation
 
 class PDFProcessor:
     def __init__(self, pdf_folder, output_excel_path, areas, insertion_points, include_subfolders, table_coordinates, rev_coordinates,revision_date, revision_description):
@@ -142,6 +142,10 @@ class PDFProcessor:
             output_pdf_path = self.get_output_path(input_pdf_path)
             doc = fitz.open(input_pdf_path)
 
+            needs_bake = doc.is_form_pdf or any(page.first_annot for page in doc)
+            if needs_bake:
+                doc.bake()
+
             for page in doc:
                 page.remove_rotation()
 
@@ -227,7 +231,7 @@ class PDFProcessor:
                                     print(f"Revision processing error: {e}")
 
 
-            doc.save(output_pdf_path)
+            doc.ez_save(output_pdf_path)
             if progress_list is not None:
                 progress_list.append(input_pdf_path)
 

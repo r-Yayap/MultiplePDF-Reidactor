@@ -4,7 +4,7 @@ import fitz  # PyMuPDF
 import customtkinter as ctk
 import tkinter as tk
 from tkinter import Menu
-from constants import *
+from backend.constants import *
 from tkinter.simpledialog import askstring  # For custom title input
 
 class PDFViewer:

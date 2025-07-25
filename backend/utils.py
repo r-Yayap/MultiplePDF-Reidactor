@@ -1,7 +1,7 @@
 # utils.py
 
 from CTkToolTip import *
-from constants import *
+from backend.constants import *
 import tkinter as tk
 from tkinter import ttk
 import customtkinter as ctk

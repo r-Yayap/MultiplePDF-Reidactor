@@ -4,8 +4,8 @@
 """
 import multiprocessing
 import customtkinter as ctk
-from gui import ReidactorGUI
-from constants import INITIAL_WIDTH, INITIAL_HEIGHT, INITIAL_X_POSITION, INITIAL_Y_POSITION
+from frontend.gui import ReidactorGUI
+from backend.constants import INITIAL_WIDTH, INITIAL_HEIGHT, INITIAL_X_POSITION, INITIAL_Y_POSITION
 
 class ReidactorApp:
     def __init__(self):
